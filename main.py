@@ -1,19 +1,19 @@
 import logging
 import json
-import argparse
-import asyncio
-from request_privat import main_request  
 import pathlib
+import asyncio
+import sys
+from privatbank_request import main_request
 
 BASE_DIR = pathlib.Path()
 
-async def main(days, currency, cur_1="EUR", cur_2="USD"):
-    request = await main_request(currency)
+async def main(days, cur_1, cur_2):
+    result = await main_request(days)
 
-    if request:
+    if result == 'Data saved to data.json':
         with open(BASE_DIR.joinpath('data.json'), 'r', encoding='utf-8') as f:
             d = json.load(f)
-
+        
             with open(BASE_DIR.joinpath('cur_list.json'), 'r', encoding='utf-8') as f_cur_list:
                 d_cur_list = json.load(f_cur_list)
 
@@ -41,20 +41,41 @@ async def main(days, currency, cur_1="EUR", cur_2="USD"):
 
                         result.append(res_dict)
 
-                    with open(BASE_DIR.joinpath('./cur_exch.json'), 'w', encoding='utf-8') as fd:
-                        json.dump(result, fd, ensure_ascii=False, indent=5)
+                    formatted_result = []
+
+                    for res_dict in result:
+                        for date, currencies in res_dict.items():
+                            formatted_dict = {
+                                date: {
+                                    cur: {
+                                        'sale': values['sale'],
+                                        'purchase': values['purchase']
+                                    }
+                                    for cur, values in currencies.items()
+                                }
+                            }
+                            formatted_result.append(formatted_dict)
+
+                    current_dir = pathlib.Path.cwd()
+
+                    with open(current_dir.joinpath('cur_exch.json'), 'w', encoding='utf-8') as fd:
+                        json.dump(formatted_result, fd, ensure_ascii=False, indent=2)
+                        print("Data saved to cur_exch.json")
+
+    else:
+        print(result)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Exchange Rate Information")
-    parser.add_argument('days', type=int, help="Number of days (up to 10)")
-    parser.add_argument('currency', help="Currency code")
-    parser.add_argument('cur_1', nargs='?', default="EUR", help="First currency code")
-    parser.add_argument('cur_2', nargs='?', default="USD", help="Second currency code")
+    if len(sys.argv) != 4:
+        print("Usage: python3 main.py <days> <currency_1> <currency_2>")
+        sys.exit(1)
 
-    args = parser.parse_args()
+    days = int(sys.argv[1])
+    cur_1 = sys.argv[2]
+    cur_2 = sys.argv[3]
 
-    if args.days < 1 or args.days > 10:
-        print("Кількість днів повинна бути від 1 до 10.")
+    if days < 1 or days > 10:
+        print("Number of days should be between 1 and 10.")
     else:
         logging.basicConfig(level=logging.INFO, format="%(threadName)s %(message)s")
-        asyncio.run(main(args.days, args.currency, args.cur_1, args.cur_2))
+        asyncio.run(main(days, cur_1, cur_2))
